@@ -2,9 +2,11 @@
 
 Koshnitsa is a collaborative shopping list app for Sofia, Bulgaria. It helps people coordinate grocery shopping, track deals, and scan receipts — with a UI in English and product names in Bulgarian.
 
-## What's been built
+**GitHub**: https://github.com/OddSlice/koshnitsa
 
-### Phase 1, Step 1 — Project Setup + Auth
+## Phase 1 — COMPLETE
+
+### Step 1 — Project Setup + Auth
 
 - **Next.js app** with TypeScript, Tailwind CSS, and App Router (`/src` directory structure)
 - **Supabase authentication** — email/password sign up and sign in
@@ -14,7 +16,7 @@ Koshnitsa is a collaborative shopping list app for Sofia, Bulgaria. It helps peo
 - **Profiles table** — linked to `auth.users` with auto-trigger on sign up (see `output/profiles-table.sql`)
 - **Auth callback and sign-out** routes
 
-### Phase 1, Step 2 — Shopping Lists + Join Code + Real-Time Sync
+### Step 2 — Shopping Lists + Join Code + Real-Time Sync
 
 - **Database tables**: `lists`, `list_members`, `list_items` — all with Row Level Security policies
 - **Lists screen** (`/lists`) — shows all lists the user belongs to, with item and member counts
@@ -28,7 +30,7 @@ Koshnitsa is a collaborative shopping list app for Sofia, Bulgaria. It helps peo
 - **Invite modal** — shows join code with copy-to-clipboard
 - **SQL output** in `output/lists-tables.sql`
 
-### Phase 1, Step 3 — Usual Items + List History
+### Step 3 — Usual Items + List History
 
 - **Database tables**: `usual_items` (personal staple products), `list_snapshots` (completed trip records) — both with RLS for per-user isolation
 - **`is_archived` column** added to `lists` table — archived lists are hidden from the active lists view
@@ -42,7 +44,7 @@ Koshnitsa is a collaborative shopping list app for Sofia, Bulgaria. It helps peo
   - Confirmation modal with optional store name (e.g. Лидл, Кауфланд, Билла)
   - Saves a JSONB snapshot of all items and their checked state to `list_snapshots`
   - Archives the list so it no longer appears in active lists
-- **History tab** (`/history`) — fully built out (was a placeholder):
+- **History tab** (`/history`) — fully built out:
   - Chronological list of completed shopping trips
   - Each card shows: list name, store name (if provided), completion date, progress bar of checked items
   - Relative date formatting (Today, Yesterday, X days ago)
@@ -50,13 +52,19 @@ Koshnitsa is a collaborative shopping list app for Sofia, Bulgaria. It helps peo
   - Full item snapshot showing all items grouped by category
   - Unchecked items shown normally, checked items muted with strikethrough
   - Summary bar with check progress
-  - **"Reuse this list"** button — creates a brand new list with the same name and all items (unchecked, fresh join code), redirects to it
-- **Components**: `UsualItemChip`, `AddUsualItemModal`, `PickListModal`, `CompleteTripModal`, `HistoryClient`, `TripDetailClient`
+  - **"Reuse this list"** button — creates a brand new list from the snapshot
 - **SQL output** in `output/usual-items-history.sql`
+
+### Step 4 — Deploy to GitHub + Vercel
+
+- **GitHub repo**: https://github.com/OddSlice/koshnitsa
+- **Vercel deployment**: connected via GitHub import
+- Environment variables configured in Vercel dashboard
+- Supabase redirect URLs configured for the live domain
 
 ## What's next
 
-- **Phase 2**: Photo item scan + nutritional info
+- **Phase 2**: Photo item scan + OpenAI item identification
 - List deletion and leave-list functionality
 - Optimistic UI updates for faster-feeling interactions
 - Connect profiles table to show who added/checked items
