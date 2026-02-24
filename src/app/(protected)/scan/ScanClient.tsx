@@ -14,11 +14,28 @@ const CATEGORIES = [
   "Друго",
 ];
 
+const FOOD_CATEGORIES = [
+  "Плодове и зеленчуци",
+  "Месо и риба",
+  "Мляко и яйца",
+  "Хляб и тестени",
+  "Замразени",
+];
+
 interface IdentifiedItem {
   name: string;
   quantity: string;
   category: string;
   confidence: number;
+}
+
+interface NutritionData {
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+  description: string;
+  estimated: boolean;
 }
 
 interface ListOption {
@@ -39,6 +56,11 @@ export default function ScanClient({ userId }: { userId: string }) {
   const [editQuantity, setEditQuantity] = useState("");
   const [editCategory, setEditCategory] = useState("Друго");
   const [editNote, setEditNote] = useState("");
+
+  // Nutrition
+  const [nutrition, setNutrition] = useState<NutritionData | null>(null);
+  const [nutritionLoading, setNutritionLoading] = useState(false);
+  const [nutritionExpanded, setNutritionExpanded] = useState(false);
 
   // List picking
   const [lists, setLists] = useState<ListOption[]>([]);
@@ -107,6 +129,41 @@ export default function ScanClient({ userId }: { userId: string }) {
     []
   );
 
+  // Fetch nutrition data for food items
+  const fetchNutrition = useCallback(
+    async (productName: string, quantity: string, category: string) => {
+      // Only fetch for food categories
+      if (!FOOD_CATEGORIES.includes(category)) {
+        setNutrition(null);
+        return;
+      }
+
+      setNutritionLoading(true);
+      try {
+        const res = await fetch("/api/nutrition", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: productName, quantity }),
+        });
+
+        if (res.ok) {
+          const data: NutritionData = await res.json();
+          setNutrition(data);
+        } else {
+          // Nutrition is supplementary — don't fail the whole flow
+          console.warn("Nutrition fetch failed:", res.status);
+          setNutrition(null);
+        }
+      } catch (err) {
+        console.warn("Nutrition fetch error:", err);
+        setNutrition(null);
+      } finally {
+        setNutritionLoading(false);
+      }
+    },
+    []
+  );
+
   const handleFileChange = useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
@@ -115,6 +172,8 @@ export default function ScanClient({ userId }: { userId: string }) {
       setState("loading");
       setError(null);
       setItem(null);
+      setNutrition(null);
+      setNutritionExpanded(false);
 
       try {
         // Resize and set preview
@@ -149,6 +208,9 @@ export default function ScanClient({ userId }: { userId: string }) {
         setEditCategory(result.category);
         setEditNote("");
         setState("result");
+
+        // Fire nutrition fetch in the background (non-blocking)
+        fetchNutrition(result.name, result.quantity, result.category);
       } catch (err) {
         setError(
           err instanceof Error ? err.message : "Something went wrong."
@@ -159,7 +221,7 @@ export default function ScanClient({ userId }: { userId: string }) {
       // Reset file input so same file can be re-selected
       e.target.value = "";
     },
-    [resizeImage]
+    [resizeImage, fetchNutrition]
   );
 
   const handleAddToList = useCallback(
@@ -167,16 +229,28 @@ export default function ScanClient({ userId }: { userId: string }) {
       setAdding(true);
       setShowListPicker(false);
 
+      // Build the insert payload — include nutrition if available
+      const payload: Record<string, unknown> = {
+        list_id: listId,
+        added_by: userId,
+        name: editName.trim(),
+        quantity: editQuantity.trim() || "1x",
+        note: editNote.trim() || null,
+        category: editCategory,
+      };
+
+      if (nutrition) {
+        payload.calories = nutrition.calories;
+        payload.protein = nutrition.protein;
+        payload.carbs = nutrition.carbs;
+        payload.fat = nutrition.fat;
+        payload.nutrition_description = nutrition.description;
+        payload.nutrition_estimated = true;
+      }
+
       const { error: insertError } = await supabase
         .from("list_items")
-        .insert({
-          list_id: listId,
-          added_by: userId,
-          name: editName.trim(),
-          quantity: editQuantity.trim() || "1x",
-          note: editNote.trim() || null,
-          category: editCategory,
-        });
+        .insert(payload);
 
       setAdding(false);
 
@@ -192,9 +266,19 @@ export default function ScanClient({ userId }: { userId: string }) {
         setState("idle");
         setPreview(null);
         setItem(null);
+        setNutrition(null);
+        setNutritionExpanded(false);
       }, 2000);
     },
-    [supabase, userId, editName, editQuantity, editNote, editCategory]
+    [
+      supabase,
+      userId,
+      editName,
+      editQuantity,
+      editNote,
+      editCategory,
+      nutrition,
+    ]
   );
 
   const handleAddButton = useCallback(() => {
@@ -213,12 +297,16 @@ export default function ScanClient({ userId }: { userId: string }) {
     setState("idle");
     setPreview(null);
     setItem(null);
+    setNutrition(null);
+    setNutritionExpanded(false);
     setError(null);
   }, []);
 
   const handleTakePhoto = useCallback(() => {
     fileInputRef.current?.click();
   }, []);
+
+  const isFood = FOOD_CATEGORIES.includes(editCategory);
 
   return (
     <div className="px-4 pt-4 pb-24">
@@ -458,6 +546,124 @@ export default function ScanClient({ userId }: { userId: string }) {
                 {Math.round(item.confidence * 100)}%
               </span>
             </div>
+
+            {/* === Nutrition section (food items only) === */}
+            {isFood && (
+              <div className="mt-3 border-t border-gray-100 pt-3">
+                <button
+                  onClick={() => setNutritionExpanded(!nutritionExpanded)}
+                  className="flex w-full items-center justify-between text-left"
+                >
+                  <div className="flex items-center gap-1.5">
+                    <svg
+                      className="h-4 w-4 text-gray-400"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      strokeWidth={1.5}
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M9.75 3.104v5.714a2.25 2.25 0 0 1-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 0 1 4.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15.3M14.25 3.104c.251.023.501.05.75.082M19.8 15.3l-1.57.393A9.065 9.065 0 0 1 12 15a9.065 9.065 0 0 0-6.23.693L5 14.5m14.8.8 1.402 1.402c1.232 1.232.65 3.318-1.067 3.611A48.309 48.309 0 0 1 12 21c-2.773 0-5.491-.235-8.135-.687-1.718-.293-2.3-2.379-1.067-3.61L5 14.5"
+                      />
+                    </svg>
+                    <span className="text-xs font-medium text-gray-500">
+                      Nutrition info
+                    </span>
+                    {nutritionLoading && (
+                      <div className="h-3 w-3 animate-spin rounded-full border-2 border-gray-200 border-t-gray-500" />
+                    )}
+                  </div>
+                  <svg
+                    className={`h-4 w-4 text-gray-400 transition-transform ${nutritionExpanded ? "rotate-180" : ""}`}
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    strokeWidth={1.5}
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="m19.5 8.25-7.5 7.5-7.5-7.5"
+                    />
+                  </svg>
+                </button>
+
+                {nutritionExpanded && (
+                  <div className="mt-2">
+                    {nutritionLoading ? (
+                      <div className="flex items-center gap-2 py-3">
+                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-green-200 border-t-green-600" />
+                        <span className="text-xs text-gray-400">
+                          Loading nutrition data...
+                        </span>
+                      </div>
+                    ) : nutrition ? (
+                      <div>
+                        {/* 2x2 stat grid */}
+                        <div className="grid grid-cols-2 gap-2">
+                          <div className="rounded-lg bg-gray-50 px-3 py-2">
+                            <div className="text-xs text-gray-400">
+                              Calories
+                            </div>
+                            <div className="text-sm font-semibold text-gray-800">
+                              {nutrition.calories}{" "}
+                              <span className="font-normal text-gray-400">
+                                kcal
+                              </span>
+                            </div>
+                          </div>
+                          <div className="rounded-lg bg-gray-50 px-3 py-2">
+                            <div className="text-xs text-gray-400">
+                              Protein
+                            </div>
+                            <div className="text-sm font-semibold text-gray-800">
+                              {nutrition.protein}
+                              <span className="font-normal text-gray-400">
+                                g
+                              </span>
+                            </div>
+                          </div>
+                          <div className="rounded-lg bg-gray-50 px-3 py-2">
+                            <div className="text-xs text-gray-400">Carbs</div>
+                            <div className="text-sm font-semibold text-gray-800">
+                              {nutrition.carbs}
+                              <span className="font-normal text-gray-400">
+                                g
+                              </span>
+                            </div>
+                          </div>
+                          <div className="rounded-lg bg-gray-50 px-3 py-2">
+                            <div className="text-xs text-gray-400">Fat</div>
+                            <div className="text-sm font-semibold text-gray-800">
+                              {nutrition.fat}
+                              <span className="font-normal text-gray-400">
+                                g
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                        {/* Description */}
+                        {nutrition.description && (
+                          <p className="mt-2 text-xs text-gray-500">
+                            {nutrition.description}
+                          </p>
+                        )}
+                        {/* Estimated label */}
+                        <p className="mt-1.5 text-[10px] text-gray-300 italic">
+                          ~ estimated per 100g
+                        </p>
+                      </div>
+                    ) : (
+                      <p className="py-2 text-xs text-gray-400">
+                        Nutrition data unavailable.
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Action buttons */}

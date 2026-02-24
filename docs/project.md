@@ -62,7 +62,7 @@ Koshnitsa is a collaborative shopping list app for Sofia, Bulgaria. It helps peo
 - Environment variables configured in Vercel dashboard
 - Supabase redirect URLs configured for the live domain
 
-## Phase 2 — IN PROGRESS
+## Phase 2 — COMPLETE
 
 ### Step 1 — Photo Scan + OpenAI Item Identification
 
@@ -85,8 +85,31 @@ Koshnitsa is a collaborative shopping list app for Sofia, Bulgaria. It helps peo
 - **Environment variable**: `OPENAI_API_KEY` (server-only, never sent to client)
 - **New dependency**: `openai` npm package
 
-## What's next
+### Step 2 — Nutritional Information
 
+- **API route** (`/api/nutrition`) — second OpenAI call for food items only
+  - Accepts product name + quantity, returns: calories, protein, carbs, fat (per 100g), one-line Bulgarian description
+  - All responses flagged as `estimated: true` — AI estimates, not verified label data
+  - Auth check, JSON parsing, number sanitization
+- **Food category detection** — only fetches nutrition for food categories (Плодове и зеленчуци, Месо и риба, Мляко и яйца, Хляб и тестени, Замразени); skips Почистване, Лични грижи, Друго
+- **Expandable nutrition section** on scan confirmation card:
+  - Collapsed by default, tap to expand
+  - 2×2 grid: Calories (kcal), Protein (g), Carbs (g), Fat (g)
+  - One-line Bulgarian product description
+  - "~ estimated per 100g" label
+  - Loads in background (non-blocking) — spinner shown while fetching
+- **Nutrition data stored on list items** — calories, protein, carbs, fat, nutrition_description, nutrition_estimated columns
+- **Nutrition info on list detail screen**:
+  - Small info icon (ℹ) next to items that have nutrition data
+  - Tapping opens a bottom sheet with the same nutrition grid + description
+  - Subtle — doesn't clutter the list view
+- **New component**: `NutritionSheet.tsx` — reusable bottom sheet for nutrition display
+- **Database migration**: `output/nutrition-columns.sql` — adds 6 nullable columns to `list_items`
+- **SQL output** in `output/nutrition-columns.sql`
+
+## What's next — Phase 3
+
+- **Price intelligence** — Sofia supermarkets API + OpenAI price estimation
 - List deletion and leave-list functionality
 - Optimistic UI updates for faster-feeling interactions
 - Connect profiles table to show who added/checked items
@@ -98,3 +121,4 @@ Koshnitsa is a collaborative shopping list app for Sofia, Bulgaria. It helps peo
 - The sign-out button uses a form POST to `/auth/signout` — could be a client component for better UX later
 - The `lists` table has two overlapping SELECT policies (one for members, one permissive for join-code lookup). Fine for now.
 - When reusing a list from history, only the creator is added as a member — other original members would need to rejoin via the new join code.
+- Nutrition columns must be added to the database manually — run `output/nutrition-columns.sql` on Supabase.

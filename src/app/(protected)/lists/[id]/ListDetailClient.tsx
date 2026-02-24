@@ -2,7 +2,8 @@
 
 import AddItemModal from "@/components/AddItemModal";
 import CompleteTripModal from "@/components/CompleteTripModal";
-import ListItem from "@/components/ListItem";
+import ListItem, { type ListItemData } from "@/components/ListItem";
+import NutritionSheet from "@/components/NutritionSheet";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 import { useEffect, useState, useCallback } from "react";
@@ -18,6 +19,11 @@ interface Item {
   checked_at: string | null;
   added_by: string | null;
   checked_by: string | null;
+  calories?: number | null;
+  protein?: number | null;
+  carbs?: number | null;
+  fat?: number | null;
+  nutrition_description?: string | null;
 }
 
 interface ListInfo {
@@ -52,6 +58,7 @@ export default function ListDetailClient({
   const [showInvite, setShowInvite] = useState(false);
   const [showCompleteTrip, setShowCompleteTrip] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [nutritionItem, setNutritionItem] = useState<ListItemData | null>(null);
   const supabase = createClient();
 
   // Real-time subscription
@@ -126,6 +133,10 @@ export default function ListDetailClient({
 
   const handleItemAdded = useCallback(() => {
     setShowAddItem(false);
+  }, []);
+
+  const handleNutritionTap = useCallback((item: ListItemData) => {
+    setNutritionItem(item);
   }, []);
 
   async function handleCopyCode() {
@@ -238,6 +249,7 @@ export default function ListDetailClient({
                     key={item.id}
                     item={item}
                     onToggle={handleToggleItem}
+                    onNutritionTap={handleNutritionTap}
                   />
                 ))}
               </div>
@@ -255,6 +267,7 @@ export default function ListDetailClient({
                     key={item.id}
                     item={item}
                     onToggle={handleToggleItem}
+                    onNutritionTap={handleNutritionTap}
                   />
                 ))}
               </div>
@@ -301,6 +314,19 @@ export default function ListDetailClient({
           items={items}
           userId={userId}
           onClose={() => setShowCompleteTrip(false)}
+        />
+      )}
+
+      {/* Nutrition bottom sheet */}
+      {nutritionItem && nutritionItem.calories != null && (
+        <NutritionSheet
+          itemName={nutritionItem.name}
+          calories={nutritionItem.calories}
+          protein={nutritionItem.protein ?? 0}
+          carbs={nutritionItem.carbs ?? 0}
+          fat={nutritionItem.fat ?? 0}
+          description={nutritionItem.nutrition_description ?? null}
+          onClose={() => setNutritionItem(null)}
         />
       )}
 
