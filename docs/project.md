@@ -107,7 +107,7 @@ Koshnitsa is a collaborative shopping list app for Sofia, Bulgaria. It helps peo
 - **Database migration**: `output/nutrition-columns.sql` — adds 6 nullable columns to `list_items`
 - **SQL output** in `output/nutrition-columns.sql`
 
-## Phase 3 — IN PROGRESS
+## Phase 3 — COMPLETE
 
 ### Step 1 — Sofia Supermarkets Deal Matching
 
@@ -124,20 +124,40 @@ Koshnitsa is a collaborative shopping list app for Sofia, Bulgaria. It helps peo
 - **API route** (`/api/deals`) — accepts list of item names, returns matched deals
   - Auth check via Supabase session
   - Fetches unchecked items from the selected list on the client side
-  - Returns `deal` or `no_deal` status per item with full promo details
+  - Returns `deal`, `estimated`, or `no_deal` status per item with full promo details
+  - Returns cached estimates if fresh (< 24 hours old)
 - **Deals tab** (`/deals`) — fully built out:
   - List selector dropdown at top (defaults to most recently created list)
   - "Find Deals" button — nothing runs automatically, user-initiated only
   - Loading state with spinner
-  - Results grouped: deals found (green) → no deal found (grey)
-  - Summary bar showing deal count vs no-deal count
+  - Results grouped: deals found (green) → price estimates (yellow) → no data (grey)
+  - Summary bar showing deal / estimated / no-data counts
   - Deal cards show: store badge (color-coded per chain), promo product name, prices with discount percentage, expiry countdown
-  - No-deal items shown as muted list entries
-- **No database changes** — deals are fetched live, no caching tables needed
+
+### Step 2 — AI Price Estimation for Unmatched Items
+
+- **API route** (`/api/estimate-price`) — batched OpenAI call for all unmatched items
+  - All unmatched items sent in a single GPT-4o prompt (fast + cheap)
+  - Returns per item: estimated_price_min, estimated_price_max (лв), most_likely_store, confidence (high/medium/low)
+  - Prices based on typical Bulgarian supermarket pricing
+  - Auth check, JSON parsing, number sanitization, store validation
+- **Automatic estimation** — after deals are matched, unmatched items are automatically sent for price estimation (non-blocking)
+  - "Estimating prices..." spinner shown during the process
+  - Results merge into the deals view seamlessly
+- **Estimate cards** on the Deals screen:
+  - Yellow "~ Estimated" badge with price range (e.g. "~ 2.50 – 3.20 лв")
+  - Store badge if most_likely_store is available (color-coded)
+  - "AI estimate — not a confirmed price" disclaimer
+  - Warning icon for low-confidence estimates
+- **Estimates saved to database** — stored on `list_items` table to avoid re-fetching
+  - Columns: estimated_price_min, estimated_price_max, estimated_store, price_confidence, price_estimated_at
+  - Only re-fetched if existing estimate is older than 24 hours
+- **Database migration**: `output/price-estimate-columns.sql` — adds 5 nullable columns to `list_items`
+- **SQL output** in `output/price-estimate-columns.sql`
 
 ## What's next
 
-- **Phase 3, Step 2**: OpenAI price estimation for items with no deal found
+- Best store calculation — recommend which store to shop at based on combined deals + estimates
 - List deletion and leave-list functionality
 - Optimistic UI updates for faster-feeling interactions
 - Connect profiles table to show who added/checked items
@@ -150,3 +170,4 @@ Koshnitsa is a collaborative shopping list app for Sofia, Bulgaria. It helps peo
 - The `lists` table has two overlapping SELECT policies (one for members, one permissive for join-code lookup). Fine for now.
 - When reusing a list from history, only the creator is added as a member — other original members would need to rejoin via the new join code.
 - Nutrition columns must be added to the database manually — run `output/nutrition-columns.sql` on Supabase.
+- Price estimate columns must be added to the database manually — run `output/price-estimate-columns.sql` on Supabase.
