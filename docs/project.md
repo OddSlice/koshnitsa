@@ -107,9 +107,37 @@ Koshnitsa is a collaborative shopping list app for Sofia, Bulgaria. It helps peo
 - **Database migration**: `output/nutrition-columns.sql` — adds 6 nullable columns to `list_items`
 - **SQL output** in `output/nutrition-columns.sql`
 
-## What's next — Phase 3
+## Phase 3 — IN PROGRESS
 
-- **Price intelligence** — Sofia supermarkets API + OpenAI price estimation
+### Step 1 — Sofia Supermarkets Deal Matching
+
+- **Sofia Supermarkets API** integration via public proxy (`https://sofia-supermarkets-api-proxy.stefan-bratanov.workers.dev`)
+  - No API key required
+  - `GET /products?offers=true` returns all current promotional products across stores
+  - Supported stores: Lidl, Kaufland, Billa, Fantastico, T-Market
+- **Server-side helper** (`/src/lib/supermarkets.ts`):
+  - Fetches and flattens promo products with store name + calculated discount percentage
+  - In-memory cache with 6-hour TTL + Next.js `revalidate` for double caching
+  - Fuzzy matching via Dice-Sørensen bigram similarity coefficient
+  - Contains-match boost for substring matches (e.g. "домати" in "Чери домати 500г")
+  - Configurable similarity threshold (default 0.35)
+- **API route** (`/api/deals`) — accepts list of item names, returns matched deals
+  - Auth check via Supabase session
+  - Fetches unchecked items from the selected list on the client side
+  - Returns `deal` or `no_deal` status per item with full promo details
+- **Deals tab** (`/deals`) — fully built out:
+  - List selector dropdown at top (defaults to most recently created list)
+  - "Find Deals" button — nothing runs automatically, user-initiated only
+  - Loading state with spinner
+  - Results grouped: deals found (green) → no deal found (grey)
+  - Summary bar showing deal count vs no-deal count
+  - Deal cards show: store badge (color-coded per chain), promo product name, prices with discount percentage, expiry countdown
+  - No-deal items shown as muted list entries
+- **No database changes** — deals are fetched live, no caching tables needed
+
+## What's next
+
+- **Phase 3, Step 2**: OpenAI price estimation for items with no deal found
 - List deletion and leave-list functionality
 - Optimistic UI updates for faster-feeling interactions
 - Connect profiles table to show who added/checked items
