@@ -62,9 +62,31 @@ Koshnitsa is a collaborative shopping list app for Sofia, Bulgaria. It helps peo
 - Environment variables configured in Vercel dashboard
 - Supabase redirect URLs configured for the live domain
 
+## Phase 2 — IN PROGRESS
+
+### Step 1 — Photo Scan + OpenAI Item Identification
+
+- **Scan tab** (`/scan`) — fully replaced the placeholder with a working photo-to-item flow
+- **Camera capture** — HTML file input with `capture="environment"` for rear camera on mobile
+- **Gallery upload** — separate button to pick an existing photo from the device
+- **API route** (`/api/identify-item`) — server-side OpenAI call (keeps API key off the client)
+  - Validates auth (Supabase session check)
+  - Sends base64 image to GPT-4o with vision (`detail: "low"` for speed)
+  - Structured prompt returns: name (Bulgarian), quantity, category (from existing list), confidence (0–1)
+  - Handles JSON parsing, category validation, confidence clamping
+- **Image resizing** — client-side canvas resize to max 1024px before upload (saves bandwidth)
+- **Loading state** — spinner overlay on the captured photo while AI processes
+- **Confirmation card** — editable fields for name, quantity, category dropdown, optional note
+  - Confidence bar (green ≥80%, amber ≥50%, red <50%)
+  - Low-confidence warning banner when confidence < 60%
+- **Add to list** — single-list auto-add or list picker modal if user belongs to multiple lists
+- **Success state** — green checkmark confirmation, auto-resets after 2 seconds
+- **Error state** — descriptive error message with "Try again" and "Cancel" buttons
+- **Environment variable**: `OPENAI_API_KEY` (server-only, never sent to client)
+- **New dependency**: `openai` npm package
+
 ## What's next
 
-- **Phase 2**: Photo item scan + OpenAI item identification
 - List deletion and leave-list functionality
 - Optimistic UI updates for faster-feeling interactions
 - Connect profiles table to show who added/checked items
