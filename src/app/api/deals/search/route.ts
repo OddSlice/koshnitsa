@@ -1,20 +1,28 @@
 import { createClient } from "@/lib/supabase/server";
 import {
-  getPromoProducts,
-  findAllDeals,
-  type FlatPromoProduct,
-} from "@/lib/supermarkets";
+  searchProducts,
+  getProductUrl,
+  parseDiscount,
+  type PBProduct,
+} from "@/lib/price-barometer";
 import { NextRequest, NextResponse } from "next/server";
 
-export interface SearchDealResult {
+/** Serialised product result for the client */
+export interface SearchResult {
+  id: number;
+  name: string;
+  description: string | null;
+  priceEur: number | null;
+  oldPriceEur: number | null;
+  discount: number | null;
+  quantity: string | null;
+  category: string | null;
+  imageUrl: string | null;
+  productUrl: string;
   store: string;
-  promoName: string;
-  price: number;
-  oldPrice: number;
-  discount: number;
-  validUntil: string;
-  picUrl: string;
-  score: number;
+  storeLogo: string | null;
+  validFrom: string | null;
+  validUntil: string | null;
 }
 
 export interface SearchEstimate {
@@ -22,6 +30,25 @@ export interface SearchEstimate {
   estimatedPriceMax: number;
   mostLikelyStore: string | null;
   confidence: "high" | "medium" | "low";
+}
+
+function serialise(p: PBProduct): SearchResult {
+  return {
+    id: p.id,
+    name: p.name,
+    description: p.description,
+    priceEur: p.price_eur,
+    oldPriceEur: p.old_price_eur,
+    discount: parseDiscount(p.discount),
+    quantity: p.quantity,
+    category: p.category,
+    imageUrl: p.image_url,
+    productUrl: getProductUrl(p.id),
+    store: p.supermarket.name,
+    storeLogo: p.supermarket.logo,
+    validFrom: p.brochure.valid_from,
+    validUntil: p.brochure.valid_until,
+  };
 }
 
 export async function POST(req: NextRequest) {
@@ -35,7 +62,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // 2. Parse request body — single search query
+  // 2. Parse request body
   const { query } = (await req.json()) as { query: string };
 
   if (!query || typeof query !== "string" || query.trim().length === 0) {
@@ -47,40 +74,24 @@ export async function POST(req: NextRequest) {
 
   const trimmedQuery = query.trim();
 
-  // 3. Fetch promotional products (cached server-side)
-  let promos: FlatPromoProduct[];
+  // 3. Search Price Barometer (cached in-memory for 1h)
+  let products: PBProduct[] = [];
   try {
-    promos = await getPromoProducts();
+    products = await searchProducts(trimmedQuery);
   } catch (err) {
-    console.error("Failed to fetch promos:", err);
-    return NextResponse.json(
-      { error: "Could not fetch promotional data. Try again later." },
-      { status: 502 }
-    );
+    console.error("Price Barometer search failed:", err);
+    // Fall through — will show estimate instead
   }
 
-  // 4. Find ALL matching deals (not just best)
-  const matches = findAllDeals(trimmedQuery, promos);
+  const results: SearchResult[] = products.map(serialise);
 
-  const deals: SearchDealResult[] = matches.map((m) => ({
-    store: m.product.store,
-    promoName: m.product.name,
-    price: m.product.price,
-    oldPrice: m.product.oldPrice,
-    discount: m.product.discount,
-    validUntil: m.product.validUntil,
-    picUrl: m.product.picUrl,
-    score: Math.round(m.score * 100) / 100,
-  }));
-
-  // 5. If no deals found, get a price estimate (non-blocking for client but we do it server-side)
+  // 4. If no results, get AI price estimate
   let estimate: SearchEstimate | null = null;
 
-  if (deals.length === 0) {
+  if (results.length === 0) {
     try {
       const apiKey = process.env.OPENAI_API_KEY;
       if (apiKey) {
-        // Inline single-item estimate to avoid extra network hop
         const { default: OpenAI } = await import("openai");
         const openai = new OpenAI({ apiKey });
 
@@ -154,9 +165,8 @@ Rules:
       }
     } catch (err) {
       console.error("Price estimation error in search:", err);
-      // Non-blocking — just return deals without estimate
     }
   }
 
-  return NextResponse.json({ deals, estimate, query: trimmedQuery });
+  return NextResponse.json({ results, estimate, query: trimmedQuery });
 }

@@ -1,9 +1,10 @@
 import { createClient } from "@/lib/supabase/server";
 import {
-  getPromoProducts,
-  findBestDeal,
-  type FlatPromoProduct,
-} from "@/lib/supermarkets";
+  searchProducts,
+  getProductUrl,
+  parseDiscount,
+  type PBProduct,
+} from "@/lib/price-barometer";
 import { NextRequest, NextResponse } from "next/server";
 
 export interface DealResult {
@@ -11,20 +12,35 @@ export interface DealResult {
   itemName: string;
   status: "deal" | "no_deal" | "estimated";
   // Present when status === "deal"
+  productId?: number;
   store?: string;
+  storeLogo?: string | null;
   promoName?: string;
-  price?: number;
-  oldPrice?: number;
-  discount?: number;
-  validUntil?: string;
-  picUrl?: string;
-  score?: number;
+  price?: number | null;
+  oldPrice?: number | null;
+  discount?: number | null;
+  quantity?: string | null;
+  imageUrl?: string | null;
+  productUrl?: string;
+  validFrom?: string | null;
+  validUntil?: string | null;
   // Present when status === "estimated"
   estimatedPriceMin?: number;
   estimatedPriceMax?: number;
   estimatedStore?: string | null;
   confidence?: "high" | "medium" | "low";
   priceEstimatedAt?: string | null;
+}
+
+function bestProduct(products: PBProduct[]): PBProduct | null {
+  if (products.length === 0) return null;
+  // Prefer products with a price, sorted by lowest price
+  const withPrice = products.filter((p) => p.price_eur != null);
+  if (withPrice.length > 0) {
+    withPrice.sort((a, b) => (a.price_eur ?? 999) - (b.price_eur ?? 999));
+    return withPrice[0];
+  }
+  return products[0];
 }
 
 export async function POST(req: NextRequest) {
@@ -38,7 +54,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // 2. Parse request body — list of items to check (now with estimate columns)
+  // 2. Parse request body — list of items to check
   const { items } = (await req.json()) as {
     items: {
       id: string;
@@ -58,68 +74,75 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // 3. Fetch promotional products (cached server-side)
-  let promos: FlatPromoProduct[];
-  try {
-    promos = await getPromoProducts();
-  } catch (err) {
-    console.error("Failed to fetch promos:", err);
-    return NextResponse.json(
-      { error: "Could not fetch promotional data. Try again later." },
-      { status: 502 }
-    );
-  }
-
-  // 4. Match each item against promotions
+  // 3. Search Price Barometer for each item (cached — no duplicate API calls)
   const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000;
 
-  const results: DealResult[] = items.map((item) => {
-    const match = findBestDeal(item.name, promos);
+  const results: DealResult[] = [];
 
-    if (match) {
-      return {
-        itemId: item.id,
-        itemName: item.name,
-        status: "deal" as const,
-        store: match.product.store,
-        promoName: match.product.name,
-        price: match.product.price,
-        oldPrice: match.product.oldPrice,
-        discount: match.product.discount,
-        validUntil: match.product.validUntil,
-        picUrl: match.product.picUrl,
-        score: Math.round(match.score * 100) / 100,
-      };
+  for (const item of items) {
+    let products: PBProduct[] = [];
+    try {
+      products = await searchProducts(item.name, { limit: 5 });
+    } catch (err) {
+      console.error(`Search failed for "${item.name}":`, err);
     }
 
-    // Check if we have a fresh saved estimate
-    if (
+    const best = bestProduct(products);
+
+    if (best) {
+      results.push({
+        itemId: item.id,
+        itemName: item.name,
+        status: "deal",
+        productId: best.id,
+        store: best.supermarket.name,
+        storeLogo: best.supermarket.logo,
+        promoName: best.name,
+        price: best.price_eur,
+        oldPrice: best.old_price_eur,
+        discount: parseDiscount(best.discount),
+        quantity: best.quantity,
+        imageUrl: best.image_url,
+        productUrl: getProductUrl(best.id),
+        validFrom: best.brochure.valid_from,
+        validUntil: best.brochure.valid_until,
+      });
+    } else if (
       item.estimated_price_min != null &&
       item.price_estimated_at != null
     ) {
+      // Use cached estimate if fresh
       const estimatedAt = new Date(item.price_estimated_at).getTime();
       const isFresh = Date.now() - estimatedAt < TWENTY_FOUR_HOURS;
 
       if (isFresh) {
-        return {
+        results.push({
           itemId: item.id,
           itemName: item.name,
-          status: "estimated" as const,
+          status: "estimated",
           estimatedPriceMin: item.estimated_price_min,
-          estimatedPriceMax: item.estimated_price_max ?? item.estimated_price_min,
+          estimatedPriceMax:
+            item.estimated_price_max ?? item.estimated_price_min,
           estimatedStore: item.estimated_store,
-          confidence: (item.price_confidence as "high" | "medium" | "low") ?? "low",
+          confidence:
+            (item.price_confidence as "high" | "medium" | "low") ?? "low",
           priceEstimatedAt: item.price_estimated_at,
-        };
+        });
+      } else {
+        results.push({
+          itemId: item.id,
+          itemName: item.name,
+          status: "no_deal",
+        });
       }
+    } else {
+      results.push({
+        itemId: item.id,
+        itemName: item.name,
+        status: "no_deal",
+      });
     }
-
-    return {
-      itemId: item.id,
-      itemName: item.name,
-      status: "no_deal" as const,
-    };
-  });
+  }
 
   return NextResponse.json({ results });
 }

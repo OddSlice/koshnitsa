@@ -28,7 +28,7 @@ export default async function ListDetailPage({
 
   if (!user) notFound();
 
-  // Check membership
+  // Check membership (must be sequential — auth gate)
   const { data: membership } = await supabase
     .from("list_members")
     .select("id")
@@ -38,27 +38,26 @@ export default async function ListDetailPage({
 
   if (!membership) notFound();
 
-  // Fetch list details
-  const { data: list } = await supabase
-    .from("lists")
-    .select("id, name, join_code, created_by")
-    .eq("id", id)
-    .single();
+  // Fetch list details, items, and member count in parallel
+  const [{ data: list }, { data: items }, { count: memberCount }] =
+    await Promise.all([
+      supabase
+        .from("lists")
+        .select("id, name, join_code, created_by")
+        .eq("id", id)
+        .single(),
+      supabase
+        .from("list_items")
+        .select("*")
+        .eq("list_id", id)
+        .order("created_at", { ascending: true }),
+      supabase
+        .from("list_members")
+        .select("*", { count: "exact", head: true })
+        .eq("list_id", id),
+    ]);
 
   if (!list) notFound();
-
-  // Fetch items
-  const { data: items } = await supabase
-    .from("list_items")
-    .select("*")
-    .eq("list_id", id)
-    .order("created_at", { ascending: true });
-
-  // Fetch member count
-  const { count: memberCount } = await supabase
-    .from("list_members")
-    .select("*", { count: "exact", head: true })
-    .eq("list_id", id);
 
   return (
     <ListDetailClient

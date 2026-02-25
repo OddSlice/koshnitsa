@@ -146,6 +146,13 @@ export default function ListDetailClient({
     setNutritionItem(item);
   }, []);
 
+  const handleDeleteItem = useCallback(
+    async (itemId: string) => {
+      await supabase.from("list_items").delete().eq("id", itemId);
+    },
+    [supabase]
+  );
+
   async function handleCopyCode() {
     try {
       await navigator.clipboard.writeText(list.joinCode);
@@ -281,6 +288,7 @@ export default function ListDetailClient({
                     item={item}
                     onToggle={handleToggleItem}
                     onNutritionTap={handleNutritionTap}
+                    onDelete={handleDeleteItem}
                   />
                 ))}
               </div>
@@ -299,6 +307,7 @@ export default function ListDetailClient({
                     item={item}
                     onToggle={handleToggleItem}
                     onNutritionTap={handleNutritionTap}
+                    onDelete={handleDeleteItem}
                   />
                 ))}
               </div>

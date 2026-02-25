@@ -3,8 +3,9 @@
 import { createClient } from "@/lib/supabase/client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  DealCard,
+  ProductDealCard,
   EstimateCard,
+  type SearchResult,
   type DealResult,
 } from "@/components/DealCard";
 import PickListModal from "@/components/PickListModal";
@@ -12,17 +13,6 @@ import PickListModal from "@/components/PickListModal";
 interface ListOption {
   id: string;
   name: string;
-}
-
-interface SearchDealResult {
-  store: string;
-  promoName: string;
-  price: number;
-  oldPrice: number;
-  discount: number;
-  validUntil: string;
-  picUrl: string;
-  score: number;
 }
 
 interface SearchEstimate {
@@ -43,7 +33,7 @@ export default function DealsClient({
 }) {
   const [query, setQuery] = useState("");
   const [state, setState] = useState<SearchState>("idle");
-  const [deals, setDeals] = useState<SearchDealResult[]>([]);
+  const [products, setProducts] = useState<SearchResult[]>([]);
   const [estimate, setEstimate] = useState<SearchEstimate | null>(null);
   const [searchedQuery, setSearchedQuery] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -66,7 +56,7 @@ export default function DealsClient({
     if (trimmed.length < 2) {
       if (state !== "idle") {
         setState("idle");
-        setDeals([]);
+        setProducts([]);
         setEstimate(null);
         setSearchedQuery("");
       }
@@ -88,7 +78,7 @@ export default function DealsClient({
   async function performSearch(searchQuery: string) {
     setState("loading");
     setError(null);
-    setDeals([]);
+    setProducts([]);
     setEstimate(null);
     setSearchedQuery(searchQuery);
 
@@ -105,12 +95,12 @@ export default function DealsClient({
       }
 
       const data = (await res.json()) as {
-        deals: SearchDealResult[];
+        results: SearchResult[];
         estimate: SearchEstimate | null;
         query: string;
       };
 
-      setDeals(data.deals);
+      setProducts(data.results);
       setEstimate(data.estimate);
       setState("results");
     } catch (err) {
@@ -160,21 +150,7 @@ export default function DealsClient({
     [supabase, userId, addingItemName, initialLists]
   );
 
-  // Convert search results to DealResult format for shared components
-  const dealResults: DealResult[] = deals.map((d, idx) => ({
-    itemId: `search-${idx}`,
-    itemName: searchedQuery,
-    status: "deal" as const,
-    store: d.store,
-    promoName: d.promoName,
-    price: d.price,
-    oldPrice: d.oldPrice,
-    discount: d.discount,
-    validUntil: d.validUntil,
-    picUrl: d.picUrl,
-    score: d.score,
-  }));
-
+  // Build estimate as DealResult for the EstimateCard component
   const estimateResult: DealResult | null = estimate
     ? {
         itemId: "search-estimate",
@@ -330,17 +306,17 @@ export default function DealsClient({
       {/* === RESULTS STATE === */}
       {state === "results" && (
         <div className="flex flex-col gap-5">
-          {/* Deals found */}
-          {dealResults.length > 0 && (
+          {/* Products found */}
+          {products.length > 0 && (
             <div>
               <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-green-600">
-                Promotions for &quot;{searchedQuery}&quot; ({dealResults.length})
+                Products for &quot;{searchedQuery}&quot; ({products.length})
               </h2>
               <div className="flex flex-col gap-2">
-                {dealResults.map((deal) => (
-                  <DealCard
-                    key={deal.itemId}
-                    deal={deal}
+                {products.map((product) => (
+                  <ProductDealCard
+                    key={product.id}
+                    product={product}
                     onAddToList={
                       initialLists.length > 0 ? handleAddToList : undefined
                     }
@@ -350,7 +326,7 @@ export default function DealsClient({
             </div>
           )}
 
-          {/* Price estimate (shown when no deals found) */}
+          {/* Price estimate (shown when no products found) */}
           {estimateResult && (
             <div>
               <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-amber-500">
@@ -366,7 +342,7 @@ export default function DealsClient({
           )}
 
           {/* No results at all */}
-          {dealResults.length === 0 && !estimateResult && (
+          {products.length === 0 && !estimateResult && (
             <div className="rounded-2xl bg-gray-50 px-6 py-8 text-center">
               <p className="text-sm text-gray-400">
                 No promotions or price data found for &quot;{searchedQuery}
