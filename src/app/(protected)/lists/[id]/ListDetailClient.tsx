@@ -2,6 +2,7 @@
 
 import AddItemModal from "@/components/AddItemModal";
 import CompleteTripModal from "@/components/CompleteTripModal";
+import ListDealsSheet from "@/components/ListDealsSheet";
 import ListItem, { type ListItemData } from "@/components/ListItem";
 import NutritionSheet from "@/components/NutritionSheet";
 import { createClient } from "@/lib/supabase/client";
@@ -24,6 +25,11 @@ interface Item {
   carbs?: number | null;
   fat?: number | null;
   nutrition_description?: string | null;
+  estimated_price_min?: number | null;
+  estimated_price_max?: number | null;
+  estimated_store?: string | null;
+  price_confidence?: string | null;
+  price_estimated_at?: string | null;
 }
 
 interface ListInfo {
@@ -57,6 +63,7 @@ export default function ListDetailClient({
   const [showAddItem, setShowAddItem] = useState(false);
   const [showInvite, setShowInvite] = useState(false);
   const [showCompleteTrip, setShowCompleteTrip] = useState(false);
+  const [showDeals, setShowDeals] = useState(false);
   const [copied, setCopied] = useState(false);
   const [nutritionItem, setNutritionItem] = useState<ListItemData | null>(null);
   const supabase = createClient();
@@ -205,6 +212,30 @@ export default function ListDetailClient({
           </p>
         </div>
         <button
+          onClick={() => setShowDeals(true)}
+          className="flex h-9 items-center gap-1.5 rounded-lg border border-gray-300 px-3 text-xs font-medium text-gray-700 hover:bg-gray-50 active:bg-gray-100"
+        >
+          <svg
+            className="h-4 w-4"
+            fill="none"
+            viewBox="0 0 24 24"
+            strokeWidth={1.5}
+            stroke="currentColor"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M9.568 3H5.25A2.25 2.25 0 0 0 3 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 0 0 5.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 0 0 9.568 3Z"
+            />
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M6 6h.008v.008H6V6Z"
+            />
+          </svg>
+          Deals
+        </button>
+        <button
           onClick={() => setShowInvite(true)}
           className="flex h-9 items-center gap-1.5 rounded-lg border border-gray-300 px-3 text-xs font-medium text-gray-700 hover:bg-gray-50 active:bg-gray-100"
         >
@@ -327,6 +358,15 @@ export default function ListDetailClient({
           fat={nutritionItem.fat ?? 0}
           description={nutritionItem.nutrition_description ?? null}
           onClose={() => setNutritionItem(null)}
+        />
+      )}
+
+      {/* Deals bottom sheet */}
+      {showDeals && (
+        <ListDealsSheet
+          listId={list.id}
+          items={items}
+          onClose={() => setShowDeals(false)}
         />
       )}
 

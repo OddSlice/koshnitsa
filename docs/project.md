@@ -138,14 +138,14 @@ Koshnitsa is a collaborative shopping list app for Sofia, Bulgaria. It helps peo
 
 - **API route** (`/api/estimate-price`) — batched OpenAI call for all unmatched items
   - All unmatched items sent in a single GPT-4o prompt (fast + cheap)
-  - Returns per item: estimated_price_min, estimated_price_max (лв), most_likely_store, confidence (high/medium/low)
+  - Returns per item: estimated_price_min, estimated_price_max (€), most_likely_store, confidence (high/medium/low)
   - Prices based on typical Bulgarian supermarket pricing
   - Auth check, JSON parsing, number sanitization, store validation
 - **Automatic estimation** — after deals are matched, unmatched items are automatically sent for price estimation (non-blocking)
   - "Estimating prices..." spinner shown during the process
   - Results merge into the deals view seamlessly
 - **Estimate cards** on the Deals screen:
-  - Yellow "~ Estimated" badge with price range (e.g. "~ 2.50 – 3.20 лв")
+  - Yellow "~ Estimated" badge with price range (e.g. "~ 2.50 – 3.20 €")
   - Store badge if most_likely_store is available (color-coded)
   - "AI estimate — not a confirmed price" disclaimer
   - Warning icon for low-confidence estimates

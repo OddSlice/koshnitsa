@@ -82,15 +82,15 @@ Respond with ONLY valid JSON (no markdown, no backticks) — a JSON array with o
 [
   {
     "name": "<the product name as given>",
-    "estimated_price_min": <number in лв>,
-    "estimated_price_max": <number in лв>,
+    "estimated_price_min": <number in €>,
+    "estimated_price_max": <number in €>,
     "most_likely_store": "<one of: Billa, Kaufland, Lidl, Fantastico, T-Market, or null>",
     "confidence": "<high | medium | low>"
   }
 ]
 
 Rules:
-- Prices must be in Bulgarian лв (BGN)
+- Prices must be in euros (€ / EUR) — Bulgaria uses the euro
 - Base estimates on typical Bulgarian supermarket prices for that product type and quantity
 - Set most_likely_store to the store that is most known for good prices on this type of product, or null if unsure
 - Confidence levels:
